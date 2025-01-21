@@ -38,6 +38,7 @@ import androidx.core.view.ViewCompat
  * @since 1.0.0
  * */
 class Label : AppCompatTextView {
+    val isLTR = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_LTR
     /**
      * The text of the Label. Can be set to null to hide the label. Usage of this property is
      * preferred over the inherited set/getText methods.
@@ -328,13 +329,14 @@ class Label : AppCompatTextView {
         alpha = 0f
         visibility = View.VISIBLE
 
-        val startTranslation = when(position){
-            LabelPosition.LEFT -> -marginPx + translationXPx
-            LabelPosition.RIGHT -> marginPx + translationXPx
+        val startTranslation = when (position) {
+            LabelPosition.LEFT -> if (isLTR) -marginPx + translationXPx else marginPx + translationXPx
+            LabelPosition.RIGHT -> if (isLTR) marginPx + translationXPx else -marginPx + translationXPx
         }
-        val endTranslation =  when(position){
-            LabelPosition.LEFT -> -marginPx
-            LabelPosition.RIGHT -> marginPx
+
+        val endTranslation = when (position) {
+            LabelPosition.LEFT -> if (isLTR) -marginPx else marginPx
+            LabelPosition.RIGHT -> if (isLTR) marginPx else -marginPx
         }
 
         return AnimatorSet().apply {
@@ -400,8 +402,8 @@ class Label : AppCompatTextView {
             visibility = View.VISIBLE
 
             when(position){
-                LabelPosition.LEFT -> translationX = -marginPx
-                LabelPosition.RIGHT -> translationX = marginPx
+                LabelPosition.LEFT -> if (isLTR) translationX = -marginPx else translationX = marginPx
+                LabelPosition.RIGHT -> if (isLTR) translationX = marginPx else translationX = -marginPx
             }
         }
     }
