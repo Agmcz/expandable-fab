@@ -17,7 +17,7 @@ import androidx.appcompat.widget.AppCompatTextView
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
-import android.text.TextUtils
+import androidx.core.text.TextUtilsCompat
 import java.util.Locale
 
 /**
@@ -41,7 +41,7 @@ import java.util.Locale
  * */
 class Label : AppCompatTextView {
     //val isLTR = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_LTR
-    val isRTL = TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL
+    val isRTL = TextUtilsCompat.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL
     /**
      * The text of the Label. Can be set to null to hide the label. Usage of this property is
      * preferred over the inherited set/getText methods.
