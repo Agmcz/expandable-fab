@@ -8,6 +8,7 @@ import android.content.Context
 import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.MotionEvent
@@ -40,8 +41,9 @@ import java.util.Locale
  * @since 1.0.0
  * */
 class Label : AppCompatTextView {
+    //@RequiresApi(Build.VERSION_CODES.JELLY_BEAN_MR1)
     //val isLTR = context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_LTR
-    val isRTL = TextUtilsCompat.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL
+    val isLTR = TextUtilsCompat.getLayoutDirectionFromLocale(Locale.getDefault()) == ViewCompat.LAYOUT_DIRECTION_LTR
     /**
      * The text of the Label. Can be set to null to hide the label. Usage of this property is
      * preferred over the inherited set/getText methods.
