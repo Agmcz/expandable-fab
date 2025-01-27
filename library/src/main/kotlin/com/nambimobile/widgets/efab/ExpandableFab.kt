@@ -157,7 +157,7 @@ class ExpandableFab : FloatingActionButton {
      * and the ExpandableFab itself. Depending on the size you set for the ExpandableFab, you may
      * want this margin to be different than [successiveFabOptionMarginPx]. Default value is 80f.
      * */
-    var firstFabOptionMarginPx = 85f
+    var firstFabOptionMarginPx = 87f
         set(value) {
             if (value < 0){
                 illegalArg(resources.getString(R.string.efab_efab_illegal_optional_properties))
