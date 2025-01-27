@@ -5,5 +5,5 @@ This project is a fork of the original repository: https://github.com/nambicompa
 
 ## Usage
 ```groovy
-implementation 'com.github.Agmcz:expandable-fab:v1.2.1-fork-rtl-fix-1.1'
+implementation 'com.github.Agmcz:expandable-fab:v1.2.1-fork-rtl-fix-1.2'
 ```
