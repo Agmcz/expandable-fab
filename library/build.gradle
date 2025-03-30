@@ -7,11 +7,12 @@ ext.versionMinor = 2
 ext.versionPatch = 1
 
 android {
-    compileSdkVersion 30
+    namespace 'com.nambimobile.widgets.efab'
+    compileSdk 35
 
     defaultConfig {
         minSdkVersion 15
-        targetSdkVersion 30
+        targetSdk 35
         versionCode versionMajor * 100000 + versionMinor * 100 + versionPatch * 1
         versionName "$versionMajor.$versionMinor.$versionPatch"
     }
