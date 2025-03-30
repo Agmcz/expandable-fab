@@ -612,7 +612,7 @@ class ExpandableFabLayout : CoordinatorLayout {
     }
 
     private var setStateAsOpened = object : AnimatorListenerAdapter(){
-        override fun onAnimationEnd(animation: Animator?) {
+        override fun onAnimationEnd(animation: Animator) {
             groupAnimationsFinished = true
 
             setState(true)
@@ -620,7 +620,7 @@ class ExpandableFabLayout : CoordinatorLayout {
     }
 
     private var setStateAsClosed = object : AnimatorListenerAdapter(){
-        override fun onAnimationEnd(animation: Animator?) {
+        override fun onAnimationEnd(animation: Animator) {
             groupAnimationsFinished = true
 
             setState(false)
