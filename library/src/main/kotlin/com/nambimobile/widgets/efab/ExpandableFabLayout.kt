@@ -3,59 +3,30 @@ package com.nambimobile.widgets.efab
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.content.Context
-import android.content.res.Configuration
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
-import android.view.ViewGroup
-import androidx.coordinatorlayout.widget.CoordinatorLayout
+import android.view.animation.OvershootInterpolator
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
 import androidx.core.view.ViewCompat
+import androidx.core.widget.ImageViewCompat
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 
 /**
- * The container and controller for all children views of the ExpandableFab widget (Overlay,
- * ExpandableFab, FabOption, Label). The ExpandableFabLayout handles the bulk of the functionality
- * for the ExpandableFab widget as a whole (from coordinating opening and closing animations to
- * screen orientation changes, etc). See below for an example on how to easily set up the
- * ExpandableFab widget using the ExpandableFabLayout as the containing ViewGroup.
- *
- * Protip: If you only set a single ExpandableFab widget, it will automatically be used for both
- * portrait and landscape orientations. No need to set duplicate views if you would like the same
- * widget in both orientations. If you would like two different widgets for portrait and
- * landscape however, you can do so by explicitly defining different orientations for the
- * different sets of widget views. In the example below we don't set orientation for any of the
- * views, so they default to 'portrait'. However, since we didn't explicitly set landscape views,
- * the widget will actually be used for both portrait *and* landscape.
- *
- * ExpandableFab widget Example via XML:
-
-    <com.nambimobile.widgets.efab.ExpandableFabLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-
-        <com.nambimobile.widgets.efab.Overlay
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-
-        <com.nambimobile.widgets.efab.ExpandableFab
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_marginBottom="@dimen/ui_margin_medium"
-            android:layout_marginEnd="@dimen/ui_margin_medium"
-            android:layout_marginRight="@dimen/ui_margin_medium"/>
-
-        <com.nambimobile.widgets.efab.FabOption
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"/>
-
-    </com.nambimobile.widgets.efab.ExpandableFabLayout>
+ * The design and behavior of a single option within an [ExpandableFab].
  *
  * Developer Notes:
- * 1) The ExpandableFabLayout should be given a layout_width and layout_height of match_parent,
- * and it should be a child of a ViewGroup that has access to draw over the full screen as well.
- * This is necessary as some views of the widget (like the [Overlay]) may need the ability to draw
- * over the full screen. Setting the dimensions as such will not impede the viewability,
- * clickability or focusability of any other views in your layout.
+ * 1) Layout_width and layout_height should be set to wrap_content, unless you're setting
+ * custom dimensions.
+ * 2) FabOptions must be defined within an [ExpandableFabLayout] to function properly.
+ * 3) [label.labelText] must be non-null for the optional label to show and other label properties
+ * to take effect.
  *
  * Implementation Notes:
  * 1) Since the Kotlin 'internal' modifier translates to 'public' in Java, the [JvmSynthetic]
@@ -67,181 +38,274 @@ import androidx.core.view.ViewCompat
  *
  * @since 1.0.0
  * */
-class ExpandableFabLayout : CoordinatorLayout {
-    /**
-     * A holder for all the views of the ExpandableFab widget declared in the portrait screen
-     * orientation. Values for the views will only be populated after they are added through calls
-     * to ExpandableFabLayout's addView methods (or after they're defined via XML).
-     * */
-    var portraitConfiguration = OrientationConfiguration()
+class FabOption : FloatingActionButton {
+
+    /** The [Orientation] this FabOption is viewable in. Default value is [Orientation.PORTRAIT]. **/
+    var orientation = Orientation.PORTRAIT
         private set
 
     /**
-     * A holder for all the views of the ExpandableFab widget declared in the landscape screen
-     * orientation. Values for the views will only be populated after they are added through calls
-     * to ExpandableFabLayout's addView methods (or after they're defined via XML).
+     * The color of the FabOption, as an integer in the form 0xAARRGGBB.
+     *
+     * If using an XML resource color value, retrieve it in the correct form by calling:
+     * ContextCompat.getColor(context, R.color.name_of_color_resource).
+     *
+     * Default value is the colorAccent value defined in your app theme (styles.xml). If
+     * colorAccent is not defined in your app theme, colorSecondary may be used.
+     *
+     * Usage of this property is preferred over the inherited setBackgroundColor and
+     * backgroundTintList methods.
      * */
-    var landscapeConfiguration = OrientationConfiguration()
-        private set
+    var fabOptionColor = getThemeColorAccent(context)
+        set(value){
+            this.backgroundTintList = ColorStateList.valueOf(value)
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the opening animations for ALL the
-     * Overlays inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every Overlay within a single ExpandableFabLayout.
+     * The drawable to show as the FabOption's icon. Default value is null (no icon shown).
      *
-     * Set to 0L if you don't want opening animations for ANY Overlays within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual Overlays. If you
-     * only want to change the opening animation duration for a single Overlay, leave this
-     * property as null. See [Overlay.openingAnimationDurationMs].
+     * Usage of this property is preferred over the inherited set/getImageXXX methods.
      * */
-    var overlayOpeningAnimationDurationMs: Long? = null
+    var fabOptionIcon: Drawable? = null
+        set(value) {
+            this.setImageDrawable(value)
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the closing animations for ALL the
-     * Overlays inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every Overlay within a single ExpandableFabLayout.
+     * The enabled state of this FabOption and its label. Disabled FabOptions and labels will be
+     * visually distinct and unclickable. Default value is true (enabled).
      *
-     * Set to 0L if you don't want closing animations for ANY Overlays within this
-     * ExpandableFabLayout.
+     * Usage of this property is preferred over the inherited is/setEnabled methods.
      *
-     * NOTE: This property will override whatever you set on individual Overlays. If you
-     * only want to change the closing animation duration for a single Overlay, leave this
-     * property as null and see [Overlay.closingAnimationDurationMs].
+     * NOTE: If you disable a FabOption and its label, remember to re-enable it before trying to
+     * update one of its properties. For example, disabling a FabOption then manually changing
+     * its background color will not automatically re-enable the FabOption. It, and its label,
+     * will remain disabled.
      * */
-    var overlayClosingAnimationDurationMs: Long? = null
+    var fabOptionEnabled = true
+        set(value) {
+            if(value){
+                // didn't overwrite this value, so just assign them again and we're good to go
+                fabOptionColor = fabOptionColor
+            } else {
+                val disabledColor = ContextCompat.getColor(context, R.color.efab_disabled)
+                backgroundTintList = ColorStateList.valueOf(disabledColor)
+            }
+
+            isEnabled = value
+            label.labelEnabled = value
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the opening animations for ALL the
-     * ExpandableFabs inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every ExpandableFab within a single
-     * ExpandableFabLayout.
-     *
-     * Set to 0L if you don't want opening animations for ANY ExpandableFabs within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual ExpandableFabs. If you
-     * only want to change the opening animation duration for a single ExpandableFab, leave this
-     * property as null and see [ExpandableFab.openingAnimationDurationMs].
+     * The duration (in milliseconds as a positive long) of the animations that will be played
+     * when this FabOption is being shown from a hidden state (when the ExpandableFab is opening).
+     * Set to 0L if you don't want opening animations played. Default value is 125L.
      * */
-    var expandableFabOpeningAnimationDurationMs: Long? = null
+    var openingAnimationDurationMs = 125L
+        set(value) {
+            if (value < 0){
+                illegalArg(resources.getString(R.string.efab_faboption_illegal_optional_properties))
+            }
+
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the closing animations for ALL the
-     * ExpandableFabs inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every ExpandableFab within a single ExpandableFabLayout.
-     *
-     * Set to 0L if you don't want closing animations for ANY ExpandableFabs within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual ExpandableFabs. If you
-     * only want to change the closing animation duration for a single ExpandableFab, leave this
-     * property as null and see [ExpandableFab.closingAnimationDurationMs].
+     * The duration (in milliseconds as a positive long) of the animations that will be played
+     * when this FabOption is being hidden from a visible state (when the ExpandableFab is closing).
+     * Set to 0L if you don't want closing animations played. Default value is 75L.
      * */
-    var expandableFabClosingAnimationDurationMs: Long? = null
+    var closingAnimationDurationMs = 75L
+        set(value) {
+            if (value < 0){
+                illegalArg(resources.getString(R.string.efab_faboption_illegal_optional_properties))
+            }
+
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the opening animations for ALL the
-     * FabOptions inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every FabOption within a single ExpandableFabLayout.
-     *
-     * Set to 0L if you don't want opening animations for ANY FabOptions within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual FabOptions. If you
-     * only want to change the opening animation duration for a single FabOption, leave this
-     * property as null and see [FabOption.openingAnimationDurationMs].
+     * The tension (as a positive float) in an OvershootInterpolator applied on the FabOption when
+     * it's playing its animations for being shown from a hidden state (when the ExpandableFab is
+     * opening). The OvershootInterpolator allows us to have an animation where the FabOption
+     * will grow past its regular size when initially appearing, before smoothly shrinking down
+     * to regular size. Larger values will exaggerate the effort more. Default value is 3.5f.
      * */
-    var fabOptionOpeningAnimationDurationMs: Long? = null
+    var openingOvershootTension = 3.5f
+        set(value) {
+            if (value < 0){
+                illegalArg(resources.getString(R.string.efab_faboption_illegal_optional_properties))
+            }
+
+            field = value
+        }
 
     /**
-     * The duration (in milliseconds as a positive long) of the closing animations for ALL the
-     * FabOptions inside of this ExpandableFabLayout. A convenience method so that clients
-     * don't have to set the same value for every FabOption within a single ExpandableFabLayout.
+     * The optional label attached to this FabOption. The label will only be shown when its
+     * labelText is not null. Default values for the label are as follows:
      *
-     * Set to 0L if you don't want closing animations for ANY FabOptions within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual FabOptions. If you
-     * only want to change the closing animation duration for a single FabOption, leave this
-     * property as null and see [FabOption.closingAnimationDurationMs].
+     * labelText = null
+     * labelTextColor = white
+     * labelTextSize = 14sp
+     * labelFont = Typeface.DEFAULT
+     * labelBackgroundColor = gray (#333333)
+     * labelElevation = 6dp
+     * position = LabelPosition.LEFT
+     * marginPx = 50f
+     * translationPx = 100f
+     * visibleToHiddenAnimationDurationMs = 75L
+     * hiddenToVisibleAnimationDurationMs = 250L
+     * overshootTension = 3.5f
      * */
-    var fabOptionClosingAnimationDurationMs: Long? = null
+    val label = Label(context).apply {
+        labelText = null
+        labelTextColor = ContextCompat.getColor(context, android.R.color.white)
+        labelTextSize = resources.getDimension(R.dimen.efab_label_text_size)
+        labelFont = Typeface.DEFAULT
+        labelBackgroundColor = ContextCompat.getColor(context, R.color.efab_label_background)
+        labelElevation = resources.getDimensionPixelSize(R.dimen.efab_label_elevation)
+        position = LabelPosition.LEFT
+        marginPx = 50f
+        translationXPx = 100f
+        visibleToHiddenAnimationDurationMs = 75L
+        hiddenToVisibleAnimationDurationMs = 250L
+        overshootTension = 3.5f
+    }
 
-    /**
-     * The duration (in milliseconds as a positive long) of the visible to hidden state animations
-     * for ALL the Labels inside of this ExpandableFabLayout. A convenience method so that
-     * clients don't have to set the same value for every Label within a single
-     * ExpandableFabLayout. This property will affect Labels on ExpandableFabs AND FabOptions.
-     *
-     * Set to 0L if you don't want visible to hidden animations for ANY Labels within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual Labels. If you
-     * only want to change the visible to hidden animation duration for a single Label, leave
-     * this property as null and see [Label.visibleToHiddenAnimationDurationMs].
-     * */
-    var labelVisibleToHiddenAnimationDurationMs: Long? = null
-
-    /**
-     * The duration (in milliseconds as a positive long) of the hidden to visible state animations
-     * for ALL the Labels inside of this ExpandableFabLayout. A convenience method so that
-     * clients don't have to set the same value for every Label within a single
-     * ExpandableFabLayout. This property will affect Labels on ExpandableFabs AND FabOptions.
-     *
-     * Set to 0L if you don't want hidden to visible animations for ANY Labels within this
-     * ExpandableFabLayout.
-     *
-     * NOTE: This property will override whatever you set on individual Labels. If you
-     * only want to change the hidden to visible animation duration for a single Label, leave
-     * this property as null and see [Label.hiddenToVisibleAnimationDurationMs].
-     * */
-    var labelHiddenToVisibleAnimationDurationMs: Long? = null
-
+    /** Default onClick functionality. Set by the parent layout. Not to be used by clients. **/
     @get:JvmSynthetic
     @set:JvmSynthetic
-    internal var efabAnimationsFinished = true
-        get // Redundant declarations, but must be defined for JvmSynthetic to hide from Java clients
-        set
-    private var groupAnimationsFinished = true
-    private var open = false
-    private var closeWhenAble = false
-    private var fabOptionAlreadyClicked = false
+    internal var defaultOnClickBehavior: (() -> Boolean)? = null
+        get() {
+            if(field == null){
+                illegalState(resources.getString(R.string.efab_layout_must_be_child_of_expandablefab_layout))
+            }
+
+            return field
+        }
+        set // Redundant declaration, but must be defined for JvmSynthetic to hide from Java clients
+
+    // Declared as a property so we don't create a new one each animation... slight waste reduction?
+    private val hideOnAnimationEnd = object : AnimatorListenerAdapter(){
+        override fun onAnimationEnd(animation: Animator) {
+            this@FabOption.visibility = View.GONE
+        }
+    }
+
 
     /**
-     * Used to create an ExpandableFabLayout programmatically (do not use the other constructor
-     * ExpandableFabLayout(context, attributeSet) - it is for use by the Android framework when
-     * inflating an ExpandableFabLayout via XML).
+     * Used to create a FabOption programmatically (do not use the other constructor
+     * FabOption(context, attributeSet) - it is for use by the Android framework when inflating a
+     * FabOption via XML). This constructor keeps all optional properties of a FabOption at their
+     * default values, though you can always change these values after instantiation by using the
+     * appropriate setter methods (with the exception of [orientation], which cannot be changed
+     * after instantiation).
+     *
+     * See documentation for an exhaustive list of all optional properties and their default values.
+     *
+     * Please review the Notes documented at the top of the class for guidelines and limitations
+     * when using FabOption.
      * */
-    constructor(context: Context): super(context)
+    constructor(context: Context, orientation: Orientation? = Orientation.PORTRAIT): super(context){
+        setOptionalProperties(orientation = orientation ?: this.orientation)
+    }
 
     /**
-     * Called by the system when creating an ExpandableFabLayout via XML (don't call this directly).
-     * To create an ExpandableFabLayout programmatically, use the ExpandableFabLayout(context)
-     * constructor.
+     * Called by the system when creating a FabOption via XML (don't call this directly).
+     * To create a FabOption programmatically, use the FabOption(context, orientation) constructor.
      * */
     constructor(context: Context, attributeSet: AttributeSet): super(context, attributeSet){
-        context.theme.obtainStyledAttributes(attributeSet, R.styleable.ExpandableFabLayout, 0, 0).apply {
+        // parsing properties of the FabOption's Label set via XML
+        context.theme.obtainStyledAttributes(attributeSet, R.styleable.FabOption, 0, 0).apply {
             try {
-                this@ExpandableFabLayout.overlayOpeningAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_overlayOpeningAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.overlayClosingAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_overlayClosingAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.expandableFabOpeningAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_expandableFabOpeningAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.expandableFabClosingAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_expandableFabClosingAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.fabOptionOpeningAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_fabOptionOpeningAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.fabOptionClosingAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_fabOptionClosingAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.labelVisibleToHiddenAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_labelVisibleToHiddenAnimationDurationMs)?.toLong()
-                this@ExpandableFabLayout.labelHiddenToVisibleAnimationDurationMs =
-                    getString(R.styleable.ExpandableFabLayout_efab_layout_labelHiddenToVisibleAnimationDurationMs)?.toLong()
+                val labelPositionIndex = getInt(R.styleable.FabOption_label_position, LabelPosition.LEFT.ordinal)
+                val visibleToHiddenDuration =
+                    getString(R.styleable.FabOption_label_visibleToHiddenAnimationDurationMs)?.toLong()
+                        ?: label.visibleToHiddenAnimationDurationMs
+                val hiddenToVisibleDuration =
+                    getString(R.styleable.FabOption_label_hiddenToVisibleAnimationDurationMs)?.toLong()
+                        ?: label.hiddenToVisibleAnimationDurationMs
+
+                label.apply {
+                    labelText = getString(R.styleable.FabOption_label_text)
+                    labelTextColor = getColor(
+                        R.styleable.FabOption_label_textColor,
+                        label.labelTextColor
+                    )
+                    labelTextSize = getDimension(
+                        R.styleable.FabOption_label_textSize,
+                        label.labelTextSize
+                    )
+                    val fontResourceId = getResourceId(R.styleable.FabOption_label_font, 0)
+                    labelFont = if(fontResourceId == 0){
+                        label.labelFont
+                    } else {
+                        ResourcesCompat.getFont(context, fontResourceId)
+                    }
+                    labelBackgroundColor = getColor(
+                        R.styleable.FabOption_label_backgroundColor,
+                        label.labelBackgroundColor
+                    )
+                    labelElevation = getDimensionPixelSize(
+                        R.styleable.FabOption_label_elevation,
+                        label.labelElevation
+                    )
+                    position = LabelPosition.values()[labelPositionIndex]
+                    marginPx = getFloat(R.styleable.FabOption_label_marginPx, label.marginPx)
+                    visibleToHiddenAnimationDurationMs = visibleToHiddenDuration
+                    hiddenToVisibleAnimationDurationMs = hiddenToVisibleDuration
+                    overshootTension = getFloat(
+                        R.styleable.FabOption_label_overshootTension,
+                        label.overshootTension
+                    )
+                    translationXPx = getFloat(
+                        R.styleable.FabOption_label_translationXPx,
+                        label.translationXPx
+                    )
+                }
+            }  catch (e: Exception) {
+                illegalArg(resources.getString(R.string.efab_label_illegal_optional_properties), e)
+            } finally {
+                recycle()
+            }
+        }
+
+        // parsing properties of the FabOption set via XML. We call this after parsing properties
+        // of the label, as some of the FabOption's properties may effect the label and we don't
+        // want those values to be overridden (like fabOptionEnabled).
+        context.theme.obtainStyledAttributes(attributeSet, R.styleable.FabOption, 0, 0).apply {
+            try {
+                val orientationIndex = getInt(R.styleable.FabOption_fab_orientation, Orientation.PORTRAIT.ordinal)
+                val openingDuration = getString(R.styleable.FabOption_fab_openingAnimationDurationMs)?.toLong()
+                    ?: openingAnimationDurationMs
+                val closingDuration = getString(R.styleable.FabOption_fab_closingAnimationDurationMs)?.toLong()
+                    ?: closingAnimationDurationMs
+
+                // In case the drawable is a Vector Drawable, we retrieve it in a
+                // backwards-compatible way. Calling [getDrawable] directly may result in a crash
+                // on some devices, in certain scenarios.
+                val iconResourceId = getResourceId(R.styleable.FabOption_fab_icon, 0)
+                val icon = if(iconResourceId == 0){
+                    null
+                } else {
+                    AppCompatResources.getDrawable(context, iconResourceId)
+                }
+
+                setOptionalProperties(
+                    orientation = Orientation.values()[orientationIndex],
+                    fabOptionColor = getColor(R.styleable.FabOption_fab_color, fabOptionColor),
+                    fabOptionIcon = icon,
+                    fabOptionEnabled = getBoolean(R.styleable.FabOption_fab_enabled, true),
+                    openingAnimationDurationMs = openingDuration,
+                    closingAnimationDurationMs = closingDuration,
+                    openingOvershootTension = getFloat(R.styleable.FabOption_fab_openingOvershootTension,
+                        openingOvershootTension)
+                )
             } catch (e: Exception) {
-                illegalArg(resources.getString(R.string.efab_layout_illegal_optional_properties), e)
+                illegalArg(resources.getString(R.string.efab_faboption_illegal_optional_properties), e)
             } finally {
                 recycle()
             }
@@ -252,378 +316,191 @@ class ExpandableFabLayout : CoordinatorLayout {
         if (id == View.NO_ID){
             id = ViewCompat.generateViewId()
         }
+
+        // removes default black color tint from icons (Material Theme), showing their true colors
+        ImageViewCompat.setImageTintList(this, null)
+        visibility = View.GONE
     }
 
 
     // ******************* Public methods available through the published API ******************* \\
     /**
-     * Adds a child view with the specified layout parameters to the ExpandableFabLayout.
+     * Registers a callback to be invoked when this FabOption or its label is clicked. The
+     * default behavior the FabOption will be executed before this custom callback.
      *
-     * In general, only Overlay, ExpandableFab, FabOption, and specific Material Design views
-     * (like Snackbar and BottomAppBar) should be added as children of the ExpandableFabLayout.
-     *
-     * While this library won't stop you from adding in other types as direct children to the
-     * ExpandableFabLayout, please know adding other View types may cause visual issues.
+     * Note: Only one FabOption can be clicked per ExpandableFab opening or closing animation.
+     * For example, if you set long durations on the opening animations of the ExpandableFab, then
+     * the first clicked FabOption will fire its onClickListener, and all subsequent clicks
+     * to this or other FabOptions will be ignored until the ExpandableFab has completely finished
+     * its animation (this is to prevent a user from spam clicking multiple FabOptions during long
+     * animations).
      * */
-    override fun addView(child: View?, index: Int, params: ViewGroup.LayoutParams?) {
-        when(child){
-            is Overlay -> addOverlay(child, index, params)
-            is ExpandableFab -> addExpandableFab(child, index, params)
-            is FabOption -> addFabOption(child, index, params)
-            else -> super.addView(child, index, params)
-        }
-    }
+    override fun setOnClickListener(onClickListener: OnClickListener?) {
+        super.setOnClickListener {
+            val canCallCustomListener = defaultOnClickBehavior?.invoke()
 
-    /**
-     * Convenience method for adding multiple [children] views to the ExpandableFabLayout at once,
-     * programmatically. Ensure your children views are of type Overlay, ExpandableFab or FabOption
-     * only.
-     * */
-    fun addViews(vararg children: View?){
-        for (child in children){
-            addView(child)
-        }
-    }
-
-    /**
-     * Removes all child views in both portrait and landscape orientation from the
-     * ExpandableFabLayout.
-     *
-     * This is the only correct way to remove *ALL* views from your ExpandableFab widget should you
-     * choose to reuse the same ExpandableFabLayout instead of instantiating a new one. Using any
-     * other removeView variation will provide no guarantees of proper internal state control,
-     * and thus could potentially lead to Exceptions during runtime.
-     *
-     * If you only want to remove certain FabOptions, get the current OrientationConfiguration
-     * ([portraitConfiguration] or [landscapeConfiguration] or [getCurrentConfiguration]), then
-     * call remove(FabOption) or remove(int) (the latter is named removeAt(int) in Kotlin) on its
-     * list of FabOptions.
-     * */
-    override fun removeAllViews() {
-        super.removeAllViews()
-
-        portraitConfiguration = OrientationConfiguration()
-        landscapeConfiguration = OrientationConfiguration()
-        efabAnimationsFinished = true
-        groupAnimationsFinished = true
-        open = false
-        closeWhenAble = false
-        fabOptionAlreadyClicked = false
-    }
-
-    /**
-     * Attempts to close the ExpandableFab, playing the appropriate animations in the process. If
-     * the ExpandableFab is not in a position to close (it's still playing its opening
-     * animations), it will remind itself to close once it is able.
-     *
-     * Safe to call even when no ExpandableFab is open (will do nothing).
-     * */
-    fun close(){
-        if(!animationsFinished()){
-            closeWhenAble = true
-            return
-        } else if(!open){
-            return
+            if(canCallCustomListener ?: false){
+                onClickListener?.onClick(it)
+            }
         }
 
-        groupAnimationsFinished = false
-
-        getClosingAnimations(getCurrentConfiguration()).apply { start() }
+        setLabelOnClickListener()
     }
 
     /**
-     * Returns true if the ExpandableFab is currently open (any attached Overlay, FabOption and
-     * Labels are visible and all animations are done).
+     * Sets the size of the FabOption. Overridden to ensure we never set the size to be
+     * [FabSize.CUSTOM].
+     *
+     * Clients should never need to call this directly. Instead, set [ExpandableFab.fabOptionSize].
      * */
-    fun isOpen(): Boolean {
-        return open
-    }
-
-    /**
-     * Returns the OrientationConfiguration showing for the current screen orientation.
-     * An OrientationConfiguration is just a holder for all the views of an ExpandableFab widget
-     * in a specific [Orientation].
-     *
-     * Should only be called after you have added the views to an ExpandableFabLayout
-     * programmatically via the addView methods, or declared them within an ExpandableFabLayout
-     * via XML. Otherwise, the views contained may be null for references or empty for lists.
-     *
-     * Although the [portraitConfiguration] and [landscapeConfiguration] properties are both exposed
-     * publicly for clients to obtain directly, this method allows you to retrieve the correct
-     * set of views without first knowing what screen orientation the device is currently in.
-     *
-     * Note: This method will automatically take into account orientations with no configuration
-     * set. That is, if you only set a portrait configuration, then this method will pass back
-     * that configuration even if the device is currently in landscape. You don't have to worry
-     * about being given an OrientationConfiguration for an orientation that you did not set.
-     * */
-    fun getCurrentConfiguration(): OrientationConfiguration {
-        return when(resources.configuration.orientation){
-            Configuration.ORIENTATION_PORTRAIT ->
-                if(portraitConfiguration.efab != null) portraitConfiguration else landscapeConfiguration
-            else -> if(landscapeConfiguration.efab != null) landscapeConfiguration else portraitConfiguration
+    override fun setSize(size: Int) {
+        if(size != FabSize.CUSTOM.value){
+            super.setSize(size)
         }
     }
 
 
     // ****************** Private / Internal methods not available to clients ******************* \\
-    private fun addOverlay(
-        child: View?,
-        index: Int,
-        params: ViewGroup.LayoutParams?
+    /**
+     * Sets the optional properties of this FabOption.
+     *
+     * Kotlin does not use the declared custom setter of properties when setting their default
+     * values. This is unfortunate, as our custom setters have logic that need to be executed
+     * when the property is set. So we must assign each property manually to ensure the custom
+     * setters are executed, even if we're just setting it with the already set default value.
+     * */
+    private fun setOptionalProperties(
+        orientation: Orientation = this.orientation,
+        fabOptionColor: Int = this.fabOptionColor,
+        fabOptionIcon: Drawable? = null,
+        fabOptionEnabled: Boolean = this.fabOptionEnabled,
+        openingAnimationDurationMs: Long = this.openingAnimationDurationMs,
+        closingAnimationDurationMs: Long = this.closingAnimationDurationMs,
+        openingOvershootTension: Float = this.openingOvershootTension
     ){
-        super.addView(child, index, params)
-        val overlay = (child as Overlay).also { it.defaultOnClickBehavior = ::defaultOverlayOnClickBehavior }
+        this.orientation = orientation
+        this.fabOptionColor = fabOptionColor
+        fabOptionIcon?.let { this.fabOptionIcon = it }
+        this.fabOptionEnabled = fabOptionEnabled
+        this.openingAnimationDurationMs = openingAnimationDurationMs
+        this.closingAnimationDurationMs = closingAnimationDurationMs
+        this.openingOvershootTension = openingOvershootTension
 
-        when(overlay.orientation){
-            Orientation.PORTRAIT -> portraitConfiguration.overlay = overlay
-            Orientation.LANDSCAPE -> landscapeConfiguration.overlay = overlay
-        }
-    }
-
-    private fun addExpandableFab(
-        child: View?,
-        index: Int,
-        params: ViewGroup.LayoutParams?
-    ){
-        super.addView(child, index, params)
-        val efab = (child as ExpandableFab).also {
-            it.defaultOnClickBehavior = ::defaultExpandableFabOnClickBehavior
-            it.onAnimationStart = { efabAnimationsFinished = false }
-        }
-
-        // anchoring the label to its ExpandableFab and adding it to the ExpandableFabLayout
-        efab.label.let { label ->
-            addView(label)
-
-            (label.layoutParams as LayoutParams).let {
-                it.anchorId = efab.id
-                label.layoutParams = it
-            }
-
-            label.showLabel()
-        }
-
-        when(efab.orientation){
-            Orientation.PORTRAIT -> {
-                if(portraitConfiguration.efab != null){
-                    illegalState(resources.getString(R.string.efab_layout_multiple_efabs, efab.orientation))
-                }
-
-                portraitConfiguration.efab = efab
-                efab.show()
-
-                // This portrait efab will show if we're in portrait orientation OR if we're in
-                // landscape, but no landscape efab has been set.
-                if(resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT){
-                    landscapeConfiguration.efab?.hide()
-                } else if(landscapeConfiguration.efab != null) {
-                    efab.hide()
-                }
-            }
-
-            Orientation.LANDSCAPE -> {
-                if(landscapeConfiguration.efab != null){
-                    illegalState(resources.getString(R.string.efab_layout_multiple_efabs, efab.orientation))
-                }
-
-                landscapeConfiguration.efab = efab
-                efab.show()
-
-                // This landscape efab will show if we're in landscape orientation OR if we're in
-                // portrait, but no portrait efab has been set.
-                if(resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE){
-                    portraitConfiguration.efab?.hide()
-                } else if(portraitConfiguration.efab != null) {
-                    efab.hide()
-                }
-            }
-        }
-    }
-
-    private fun addFabOption(
-        child: View?,
-        index: Int,
-        params: ViewGroup.LayoutParams?
-    ){
-        super.addView(child, index, params)
-        val fabOption = (child as FabOption).also { it.defaultOnClickBehavior = ::defaultFabOptionOnClickBehavior }
-        val configuration = when(fabOption.orientation){
-            Orientation.PORTRAIT -> portraitConfiguration
-            Orientation.LANDSCAPE -> landscapeConfiguration
-        }
-
-        // anchoring the label to its fabOption and adding it to the ExpandableFabLayout
-        fabOption.label.let { label ->
-            addView(label)
-
-            (label.layoutParams as LayoutParams).let {
-                it.anchorId = fabOption.id
-                label.layoutParams = it
-            }
-        }
-
-        configuration.fabOptions.add(fabOption)
-        configuration.setFabOptionAnchor(fabOption, configuration.fabOptions.lastIndex)
-    }
-
-    private fun defaultOverlayOnClickBehavior() {
-        close()
-    }
-
-    private fun defaultExpandableFabOnClickBehavior(){
-        if(open || !animationsFinished()){
-            close()
+        if(hasOnClickListeners()){
+            // If the view has a listener set, it was set via the onClick attribute in XML. However
+            // the label was not created at that time, so we mirror the logic on the label now.
+            setLabelOnClickListener()
         } else {
-            open()
+            // In all other cases we want to call setOnClickListener with null to set the default
+            // onClick behavior without any custom user onClick behavior.
+            setOnClickListener(null)
         }
     }
+
+    // The safe call may seem unnecessary on the non-null Label type below, but it seems default
+    // values for properties are actually not set by Kotlin by the first time this is called. So
+    // somehow even though the label is instantiated at the top of the class, by the time the
+    // Android Framework is parsing XML layout files (specifically the 'onClick' attribute, which
+    // calls setOnClickListener, where the below function is first called) the label is not yet
+    // created. So we need the safe call... on a type that should never be null. Will look more
+    // into this later.
+    private fun setLabelOnClickListener() = label?.setOnClickListener { this.callOnClick() }
 
     /**
-     * Returns whether the FabOption should run its custom onClick listener (only when no other
-     * FabOption has been clicked during the currently playing opening/closing animations).
+     * The set of animations to play when the FabOption is being shown from a hidden state (when
+     * the ExpandableFab is opening). This kicks off the FabOption's animation along with its
+     * optional label's animation.
+     *
+     * @param globalDurationMs the global FabOption opening animation duration that a client
+     * set on the ExpandableFabLayout. If set, this value takes precedence over the local
+     * [openingAnimationDurationMs].
+     * @param globalLabelDurationMs the global Label hidden to visible animation duration that a
+     * client set on the ExpandableFabLayout. If set, this value takes precedence over
+     * [label.hiddenToVisibleAnimationDurationMs].
      * */
-    private fun defaultFabOptionOnClickBehavior(): Boolean {
-        return if(fabOptionAlreadyClicked){
-            false
-        } else {
-            fabOptionAlreadyClicked = true
-            close()
+    @JvmSynthetic
+    internal fun openingAnimations(
+        index: Int,
+        size: FabSize,
+        position: FabOptionPosition,
+        firstFabOptionMarginPx: Float,
+        successiveFabOptionMarginPx: Float,
+        globalDurationMs: Long?,
+        globalLabelDurationMs: Long?
+    ): Animator {
+        this.alpha = 0f
+        this.visibility = View.VISIBLE
+        this.size = size.value
 
-            true
+        val (firstMarginPx, successiveMarginPx) = when(position){
+            FabOptionPosition.ABOVE -> Pair(-firstFabOptionMarginPx, -successiveFabOptionMarginPx)
+            FabOptionPosition.BELOW -> Pair(firstFabOptionMarginPx, successiveFabOptionMarginPx)
         }
-    }
 
-    private fun open(){
-        if(open){
-            return
-        }
-
-        groupAnimationsFinished = false
-
-        getOpeningAnimations(getCurrentConfiguration()).apply { start() }
-    }
-
-    private fun getOpeningAnimations(configuration: OrientationConfiguration): Animator {
-        val efab = configuration.efab as ExpandableFab
-        val optionAndLabelAnimationPairs = configuration.fabOptions.mapIndexed { index, fabOption ->
-            fabOption.openingAnimations(
-                index = index,
-                size = efab.fabOptionSize,
-                position = efab.fabOptionPosition,
-                firstFabOptionMarginPx = efab.firstFabOptionMarginPx,
-                successiveFabOptionMarginPx = efab.successiveFabOptionMarginPx,
-                globalDurationMs = fabOptionOpeningAnimationDurationMs,
-                globalLabelDurationMs = labelHiddenToVisibleAnimationDurationMs
+        val openingAnimations = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(this@FabOption, "scaleX", 0f, 1f).apply {
+                    this.duration = globalDurationMs ?: openingAnimationDurationMs
+                    interpolator = OvershootInterpolator(openingOvershootTension)
+                },
+                ObjectAnimator.ofFloat(this@FabOption, "scaleY", 0f, 1f).apply {
+                    this.duration = globalDurationMs ?: openingAnimationDurationMs
+                    interpolator = OvershootInterpolator(openingOvershootTension)
+                },
+                ObjectAnimator.ofFloat(this@FabOption, "alpha", 0f, 1f).apply {
+                    this.duration = globalDurationMs ?: openingAnimationDurationMs
+                },
+                if (index == 0) {
+                    ObjectAnimator.ofFloat(this@FabOption, "translationY", firstMarginPx).apply {
+                        this.duration = 1L
+                    }
+                } else {
+                    ObjectAnimator.ofFloat(this@FabOption, "translationY", successiveMarginPx).apply {
+                        this.duration = 1L
+                    }
+                }
             )
         }
 
         return AnimatorSet().apply {
-            playTogether(
-                configuration.overlay?.openingAnimations(
-                    globalDurationMs = overlayOpeningAnimationDurationMs) ?: AnimatorSet(),
-                efab.openingAnimations(
-                    globalDurationMs = expandableFabOpeningAnimationDurationMs,
-                    globalLabelDurationMs = labelVisibleToHiddenAnimationDurationMs
-                ){
-                    efabAnimationsFinished = true
-                    setState(true)
-                },
-                AnimatorSet().apply { playSequentially(optionAndLabelAnimationPairs) }
-            )
-
-            addListener(setStateAsOpened)
+            playTogether(openingAnimations, label.hiddenToVisibleAnimations(globalLabelDurationMs))
         }
     }
 
-    private fun getClosingAnimations(configuration: OrientationConfiguration): Animator {
-        val efab = configuration.efab as ExpandableFab
-        val optionAndLabelAnimationPairs = configuration.fabOptions.map {
-            it.closingAnimations(
-                globalDurationMs = fabOptionClosingAnimationDurationMs,
-                globalLabelDurationMs = labelVisibleToHiddenAnimationDurationMs
+    /**
+     * The set of animations to play when the FabOption is being hidden from a visible state (when
+     * the ExpandableFab is closing). This kicks off the FabOption's animation along with its
+     * optional label's animation.
+     *
+     * @param globalDurationMs the global FabOption closing animation duration that a client
+     * set on the ExpandableFabLayout. If set, this value takes precedence over the local
+     * [closingAnimationDurationMs].
+     * @param globalLabelDurationMs the global Label visible to hidden animation duration that a
+     * client set on the ExpandableFabLayout. If set, this value takes precedence over
+     * [label.visibleToHiddenAnimationDurationMs].
+     * */
+    @JvmSynthetic
+    internal fun closingAnimations(
+        globalDurationMs: Long?,
+        globalLabelDurationMs: Long?
+    ): Animator {
+        val closingAnimations = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(this@FabOption, "scaleX", 0f).apply {
+                    this.duration = globalDurationMs ?: closingAnimationDurationMs
+                },
+                ObjectAnimator.ofFloat(this@FabOption, "scaleY", 0f).apply {
+                    this.duration = globalDurationMs ?: closingAnimationDurationMs
+                },
+                ObjectAnimator.ofFloat(this@FabOption, "alpha", 0f).apply {
+                    this.duration = globalDurationMs ?: closingAnimationDurationMs
+                }
             )
+            addListener(hideOnAnimationEnd)
         }
 
         return AnimatorSet().apply {
-            playTogether(
-                configuration.overlay?.closingAnimations(
-                    globalDurationMs = overlayClosingAnimationDurationMs) ?: AnimatorSet(),
-                efab.closingAnimations(
-                    globalDurationMs = expandableFabClosingAnimationDurationMs,
-                    globalLabelDurationMs = labelHiddenToVisibleAnimationDurationMs
-                ){
-                    efabAnimationsFinished = true
-                    setState(false)
-                },
-                AnimatorSet().apply { playSequentially(optionAndLabelAnimationPairs.reversed()) }
-            )
-
-            addListener(setStateAsClosed)
-        }
-    }
-
-    /**
-     * Tells us whether all animations are finished. [ExpandableFab] is unique in that it
-     * performs its animations manually, without use of an Animator (unlike the other views
-     * within this widget). So the ExpandableFabLayout essentially has to keep track of two
-     * separate sets of animations: 1) manual animations on the currently shown ExpandableFab,
-     * and 2) Animator animations of the Overlay, FabOption and all Labels, grouped together.
-     *
-     * This will only return true if BOTH sets of animations are finished running.
-     * */
-    private fun animationsFinished(): Boolean {
-        return efabAnimationsFinished && groupAnimationsFinished
-    }
-
-    /**
-     * Sets the state necessary to show that the ExpandableFab is now fully opened (opening
-     * animations are finished playing and all views of the widget are visible) or fully closed
-     * (closing animations are finished playing and all views of the widget are hidden).
-     *
-     * As stated in [animationsFinished], we have to track two separate sets of animations
-     * because the animations performed on the [ExpandableFab] are unique and don't use an Animator
-     * like the other widget views.
-     *
-     * The two sets of animations are:
-     * 1) Manual animations on the currently shown ExpandableFab, and
-     * 2) [Animator] animations of the Overlay, FabOption and all Labels, grouped together).
-     *
-     * Both sets of animations will call this method when their respective animations have
-     * finished playing. However, this method will only actually set the state of the widget as
-     * opened or closed when it can determine both sets of animations have finished. In other
-     * words, only the call from the longer (duration wise) of the two animations will actually
-     * trigger the state to change. So seeing this called twice per call to open/close is expected.
-     * */
-    private fun setState(opened: Boolean){
-        if(animationsFinished()){
-            if(opened){
-                open = true
-
-                if(closeWhenAble){
-                    close()
-                }
-            } else {
-                open = false
-                closeWhenAble = false
-                fabOptionAlreadyClicked = false
-            }
-        }
-    }
-
-    private var setStateAsOpened = object : AnimatorListenerAdapter(){
-        override fun onAnimationEnd(animation: Animator?) {
-            groupAnimationsFinished = true
-
-            setState(true)
-        }
-    }
-
-    private var setStateAsClosed = object : AnimatorListenerAdapter(){
-        override fun onAnimationEnd(animation: Animator?) {
-            groupAnimationsFinished = true
-
-            setState(false)
+            playTogether(closingAnimations, label.visibleToHiddenAnimations(globalLabelDurationMs))
         }
     }
 }
