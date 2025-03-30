@@ -105,7 +105,7 @@ class Overlay : FrameLayout {
 
     // Declared as a property so we don't create a new one each animation... slight waste reduction?
     private val hideOnAnimationEnd = object : AnimatorListenerAdapter(){
-        override fun onAnimationEnd(animation: Animator?) {
+        override fun onAnimationEnd(animation: Animator) {
             this@Overlay.visibility = View.GONE
         }
     }
